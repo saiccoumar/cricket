@@ -204,6 +204,18 @@ Run the tests, which check against pinocchio and, when `nvcc` is available, devi
 python -m pytest tests/test_cuda_codegen.py
 ```
 
+### Cooperative tiers
+
+`cricket.tiered` schedules a trace (for example `data["eejac_code"]`) for a group of CUDA workers: it levels the dataflow graph, spreads each level's statements over the workers, and emits one `switch (rank)` per level with a barrier between levels. Cross-level values live in reused shared-memory (or global) slots.
+```python
+from cricket import tiered
+
+sched = tiered.schedule(gen.data["eejac_code"], units=4)            # 4 warps
+source = tiered.emit(sched, "ee_pose_jacobian_warp", mode="warp")    # 32 configs per block
+floats = tiered.smem_floats(sched, "warp")                           # scratch per block
+```
+Mode `"warp"` gives each lane its own configuration and lets warps split the statements, so lanes stay convergent. Outputs equal the thread tier's up to FMA contraction (bit-identical with `-fmad=false`).
+
 ## Available Parameters for Templates
 
 Templating is done with [inja](https://github.com/pantor/inja).
