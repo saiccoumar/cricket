@@ -168,6 +168,41 @@ For the Panda, this would be:
 python scripts/random_dance.py --robot panda
 ```
 
+## Generating CUDA Kernels
+
+Setting `"language": "cuda"` emits a single-precision header of robot-specialized `__host__ __device__` functions for use inside your own CUDA kernels:
+```bash
+./build/fkcc_gen resources/panda_cuda.json   # writes panda_fk.cuh
+```
+or from Python (with no `template_path`, the bundled `templates/fk_template.cuh` is used):
+```python
+import cricket
+
+opts = cricket.GenOptions(
+    urdf="panda/panda_spherized.urdf",
+    srdf="panda/panda.srdf",
+    end_effector="panda_grasptarget",
+    language="cuda",
+    data={"name": "Panda"},
+)
+source = cricket.generate_robot_source(opts).source
+```
+The header defines, in `namespace cricket::robots::<lowercase name>`:
+- `ee_pose(q, pose)`: end-effector pose as `[qw, qx, qy, qz, tx, ty, tz]`.
+- `ee_pose_jacobian(q, pose, jacobian)`: pose plus the geometric Jacobian (row-major `6 x n_q`, rows linear then angular, in pinocchio's `LOCAL_WORLD_ALIGNED` convention).
+- `sphere_centers(q, spheres)`: world-frame `[x, y, z, r]` for every collision sphere.
+- `n_q`, `n_spheres`, `end_effector`, `joint_names`: `q` is ordered as `joint_names`.
+- `frame_poses(q, poses)` (when the data lists frame names under `"trace_frames"`): world pose of each named frame, 7 floats each, in the order given, with `n_frames` and `frame_names`. URDF joint and link names are both accepted; if a joint and a link share a name, the joint's frame is used.
+
+Every function is straight-line code with compile-time constants: there is no topology to walk and no runtime indexing, so all per-thread state stays in registers.
+The header compiles with `nvcc`, with NVRTC, and as plain host C++ (handy for testing). Define `CRICKET_HD` to change the function qualifiers.
+Mimic joints follow their driving joint and take no slot in `q`. Robots with continuous, planar or floating joints (`n_q != n_v`) are rejected.
+
+Run the tests, which check against pinocchio and, when `nvcc` is available, device against host:
+```bash
+python -m pytest tests/test_cuda_codegen.py
+```
+
 ## Available Parameters for Templates
 
 Templating is done with [inja](https://github.com/pantor/inja).
@@ -197,3 +232,5 @@ In addition to the specified input fields from the configuration file, the scrip
 - `spherefk_code`, `spherefk_code_vars`, `spherefk_code_output`: C-style code for computing position of all spheres, the number of intermediate variables used, and the number of output variables.
 - `ccfk_code`, `ccfk_code_vars`, `ccfk_code_output`: C-style code for computing position of all spheres and bounding spheres for collision checking, the number of intermediate variables used, and the number of output variables.
 - `ccfkee_code`, `ccfkee_code_vars`, `ccfkee_code_output`: C-style code for computing position of all spheres and bounding spheres for collision checking as well as the position and quaternion for the end-effector, the number of intermediate variables used, and the number of output variables.
+- `eejac_code`, `eejac_code_vars`, `eejac_code_output`: code for the end-effector pose (as in `eefk_code`) followed by its row-major `6 x n_v` geometric Jacobian.
+- `framesfk_code`, `framesfk_code_vars`, `framesfk_code_output` (when `trace_frames` is set): code for the world pose of each frame listed in `trace_frames`, 12 outputs per frame.

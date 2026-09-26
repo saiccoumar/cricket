@@ -3,6 +3,7 @@
 #include "../codegen/pinocchio_cppadcg.hh"
 #include "../codegen/lang_cpp.hh"
 #include "../codegen/lang_cpp_block.hh"
+#include "../codegen/lang_cuda.hh"
 #include "../codegen/lang_rust.hh"
 #include "../codegen/lang_name_gen.hh"
 
@@ -44,6 +45,11 @@ namespace cricket
         {
             CppAD::cg::LanguageRust<double> langRust("double");
             handler.generateCode(function_code, langRust, result, nameGen);
+        }
+        else if (language == "cuda")
+        {
+            CppAD::cg::LanguageCUDA<double> langCUDA;
+            handler.generateCode(function_code, langCUDA, result, nameGen);
         }
         else
         {

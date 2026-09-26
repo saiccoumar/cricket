@@ -39,6 +39,12 @@ namespace cricket
     /// built from a world-frame position difference and a world-frame rotation difference.
     auto trace_ee_fk_jacobian(const RobotInfo &info, const std::string &language) -> Traced;
 
+    /// Traces the world poses of the named pinocchio frames, 12 outputs each laid out as the end-effector
+    /// pose of `trace_sphere_cc_fk`, in the order given. URDF joint and link names are both accepted; when a
+    /// joint and a link share a name, the joint's frame is used.
+    auto trace_frames(const RobotInfo &info, const std::vector<std::string> &frames, const std::string &language)
+        -> Traced;
+
     auto trace_map_to_configuration(
         const pinocchio::Model &model,
         const std::string &language,

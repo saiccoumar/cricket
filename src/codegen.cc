@@ -1,9 +1,7 @@
 #include <cricket/codegen.hh>
 #include <cricket/embedded_templates.hh>
 
-#include "codegen/pinocchio_cppadcg.hh"
-#include "codegen/lang_cpp.hh"
-#include "codegen/lang_rust.hh"
+#include "tracing/internal.hh"
 
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
@@ -24,14 +22,6 @@ namespace cricket
 
     namespace
     {
-        // Typedef for AD types
-        using CGD = CG<double>;
-        using ADCG = AD<CGD>;
-
-        using ADModel = ModelTpl<ADCG>;
-        using ADData = DataTpl<ADCG>;
-        using ADVectorXs = Eigen::Matrix<ADCG, Eigen::Dynamic, 1>;
-
         auto
         trace_sphere(const SphereInfo &sphere, const ADData &ad_data, ADVectorXs &data, std::size_t index)
         {
@@ -139,25 +129,7 @@ namespace cricket
 
         CppAD::vector<CGD> result = collision_sphere_func.Forward(0, ind_vars);
 
-        LangCDefaultVariableNameGenerator<double> nameGen;
-        std::ostringstream function_code;
-
-        if (language == "c++")
-        {
-            LanguageCCustom<double> langC("double");
-            handler.generateCode(function_code, langC, result, nameGen);
-        }
-        else if (language == "rust")
-        {
-            LanguageRust<double> langRust("double");
-            handler.generateCode(function_code, langRust, result, nameGen);
-        }
-        else
-        {
-            throw std::runtime_error(fmt::format("unsupported language {}", language));
-        }
-
-        return Traced{function_code.str(), handler.getTemporaryVariableCount(), n_out};
+        return emit_traced(handler, result, language, n_out);
     }
 
     auto generate_robot_source(const GenOptions &opts) -> GenResult
@@ -223,6 +195,14 @@ namespace cricket
         data["integrate_configuration_code_vars"] = integration.temp_variables;
         data["integrate_configuration_code_output"] = integration.outputs;
 
+        if (data.contains("trace_frames"))
+        {
+            auto frames = trace_frames(robot, data["trace_frames"].get<std::vector<std::string>>(), opts.language);
+            data["framesfk_code"] = frames.code;
+            data["framesfk_code_vars"] = frames.temp_variables;
+            data["framesfk_code_output"] = frames.outputs;
+        }
+
         if (opts.forward_dynamics)
         {
             pinocchio::Model dynamics_model;
@@ -261,7 +241,21 @@ namespace cricket
 
         inja::Environment env;
         inja::Template main_template;
-        if (use_embedded)
+        if (opts.language == "cuda" and robot.model.nq != robot.model.nv)
+        {
+            throw std::runtime_error(
+                fmt::format(
+                    "cricket::generate_robot_source: the CUDA backend needs n_q == n_v (got {} and {}); "
+                    "continuous, planar and floating joints are not supported",
+                    robot.model.nq,
+                    robot.model.nv));
+        }
+
+        if (use_embedded and opts.language == "cuda")
+        {
+            main_template = env.parse(std::string(embedded::kCudaFkTemplate));
+        }
+        else if (use_embedded)
         {
             auto ccfk_t = env.parse(std::string(embedded::kCcfkTemplate));
             env.include_template("ccfk", ccfk_t);

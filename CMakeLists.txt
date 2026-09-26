@@ -98,6 +98,7 @@ endif()
 # Load FK templates into embedded strings
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/resources/templates/fk_template.hh"   CRICKET_FK_TEMPLATE)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/resources/templates/ccfk_template.hh" CRICKET_CCFK_TEMPLATE)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/resources/templates/fk_template.cuh"  CRICKET_CUDA_FK_TEMPLATE)
 configure_file(
     include/cricket/embedded_templates.hh.in
     ${CMAKE_CURRENT_BINARY_DIR}/generated/cricket/embedded_templates.hh
@@ -108,6 +109,7 @@ add_library(cricket
     src/robot_info.cc
     src/codegen.cc
     src/tracing/mapping.cc
+    src/tracing/frames.cc
     src/tracing/interpolate.cc
     src/tracing/distance.cc
     src/tracing/frame_jacobian.cc
