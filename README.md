@@ -192,6 +192,7 @@ The header defines, in `namespace cricket::robots::<lowercase name>`:
 - `ee_pose_jacobian(q, pose, jacobian)`: pose plus the geometric Jacobian (row-major `6 x n_q`, rows linear then angular, in pinocchio's `LOCAL_WORLD_ALIGNED` convention).
 - `sphere_centers(q, spheres)`: world-frame `[x, y, z, r]` for every collision sphere.
 - `n_q`, `n_spheres`, `end_effector`, `joint_names`: `q` is ordered as `joint_names`.
+- `forward_dynamics(x, qdd)` (when `forward_dynamics` is set): joint accelerations from `x = [q, qd, tau]` by the articulated-body algorithm, using `dynamics_urdf` when given.
 - `frame_poses(q, poses)` (when the data lists frame names under `"trace_frames"`): world pose of each named frame, 7 floats each, in the order given, with `n_frames` and `frame_names`. URDF joint and link names are both accepted; if a joint and a link share a name, the joint's frame is used.
 
 Every function is straight-line code with compile-time constants: there is no topology to walk and no runtime indexing, so all per-thread state stays in registers.

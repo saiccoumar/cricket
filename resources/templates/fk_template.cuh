@@ -10,6 +10,8 @@
 //   jacobian (6 * n_q)        row-major, rows (vx, vy, vz, wx, wy, wz), LOCAL_WORLD_ALIGNED at the EE origin
 //   spheres  (4 * n_spheres)  [x, y, z, r] per collision sphere, world frame
 //   poses    (7 * n_frames)   frame_poses(): world pose of each frame named in the "trace_frames" data key
+//   qdd      (n_q)            forward_dynamics() (when generated with forward dynamics): accelerations
+//                             from [q, qd, tau] (3 * n_q), gravity -9.81 along world z
 //
 // Define CRICKET_HD before including to override the function qualifiers.
 
@@ -129,6 +131,15 @@ namespace cricket::robots::{{lower(name)}}
         {
             detail::pack_pose(y + 12 * i, poses + 7 * i);
         }
+    }
+{% endif %}{% if exists("forward_dynamics_code") %}
+    // Forward dynamics (ABA) of the dynamics model: x = [q, qd, tau], each n_q long.
+    CRICKET_HD void forward_dynamics(const float *x, float *qdd)
+    {
+        {% if forward_dynamics_code_vars > 0 %}float v[{{forward_dynamics_code_vars}}];{% endif %}
+        float *y = qdd;
+
+        {{forward_dynamics_code}}
     }
 {% endif %}
 }  // namespace cricket::robots::{{lower(name)}}

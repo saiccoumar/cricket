@@ -67,7 +67,7 @@ extern "C" int batch(const float *q, float *pose, float *jac, float *spheres, in
 """
 
 
-def generate(robot: str, frames: list[str] | None = None):
+def generate(robot: str, frames: list[str] | None = None, forward_dynamics: bool = False):
     cfg = json.loads((ROOT / f"{robot}.json").read_text())
     data = {"name": cfg["name"]}
     if frames is not None:
@@ -79,6 +79,7 @@ def generate(robot: str, frames: list[str] | None = None):
         language="cuda",
         data=data,
     )
+    opts.forward_dynamics = forward_dynamics
     return cfg, cricket.generate_robot_source(opts)
 
 
@@ -223,3 +224,38 @@ def test_constant_pose_compiles(jit, tmp_path):
     pose, jac, _ = call_batch(HOST_FN(jit.lookup_address("batch_pandaroot")), q, gen.n_spheres)
     np.testing.assert_allclose(pose[0], [1, 0, 0, 0, 0, 0, 0], atol=1e-6)
     np.testing.assert_allclose(jac, 0, atol=1e-6)
+
+
+FD_WRAPPER = r"""
+#include "robot.cuh"
+namespace r = cricket::robots::{ns};
+extern "C" void fd_{ns}(const float *x, float *qdd, int n)
+{{
+    for (int i = 0; i < n; ++i) r::forward_dynamics(x + i * 3 * r::n_q, qdd + i * r::n_q);
+}}
+"""
+
+
+@pytest.mark.parametrize("robot", ["panda", "ur5"])
+def test_forward_dynamics_matches_pinocchio(robot, jit, tmp_path):
+    cfg, gen = generate(robot, forward_dynamics=True)
+    ns = cfg["name"].lower()
+    (tmp_path / "robot.cuh").write_text(gen.source)
+    opts = _core_ext.jit.CompileOptions()
+    opts.include_dirs = [str(tmp_path)]
+    jit.add_source(FD_WRAPPER.format(ns=ns), opts)
+    fn = ctypes.CFUNCTYPE(None, *[ctypes.POINTER(ctypes.c_float)] * 2, ctypes.c_int)(
+        jit.lookup_address(f"fd_{ns}"))
+
+    model = pin.buildModelFromUrdf(str(ROOT / cfg["urdf"]), mimic=True)
+    data = model.createData()
+    x = np.random.default_rng(3).uniform(-1.0, 1.0, size=(200, 3 * model.nq)).astype(np.float32)
+    qdd = np.empty((len(x), model.nv), np.float32)
+    ptr = ctypes.POINTER(ctypes.c_float)
+    fn(x.ctypes.data_as(ptr), qdd.ctypes.data_as(ptr), len(x))
+
+    n = model.nq
+    for i in range(len(x)):
+        xi = x[i].astype(np.float64)
+        ref = pin.aba(model, data, xi[:n], xi[n:2 * n], xi[2 * n:])
+        np.testing.assert_allclose(qdd[i], ref, rtol=1e-3, atol=1e-3 * max(1.0, np.abs(ref).max()))
