@@ -105,7 +105,10 @@ NB_MODULE(_core_ext, m)
         .def_rw("template_path", &cricket::GenOptions::template_path)
         .def_rw("subtemplates", &cricket::GenOptions::subtemplates)
         .def_rw("language", &cricket::GenOptions::language)
-        .def_rw("forward_dynamics", &cricket::GenOptions::forward_dynamics);
+        .def_rw("forward_dynamics", &cricket::GenOptions::forward_dynamics)
+        .def_rw("inverse_dynamics", &cricket::GenOptions::inverse_dynamics)
+        .def_rw("mass_matrix", &cricket::GenOptions::mass_matrix)
+        .def_rw("inverse_dynamics_derivatives", &cricket::GenOptions::inverse_dynamics_derivatives);
 
     nb::class_<cricket::GenResult>(m, "GenResult")
         .def_ro("source", &cricket::GenResult::source)

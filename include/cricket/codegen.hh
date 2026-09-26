@@ -54,6 +54,17 @@ namespace cricket
     auto trace_interpolate_block(const pinocchio::Model &model, const std::string &language) -> Traced;
     auto trace_distance(const pinocchio::Model &model, const std::string &language) -> Traced;
     auto trace_forward_dynamics(const pinocchio::Model &model, const std::string &language) -> Traced;
+
+    /// Inverse dynamics (RNEA): input `[q, v, a]`, output the `nv` joint torques.
+    auto trace_inverse_dynamics(const pinocchio::Model &model, const std::string &language) -> Traced;
+
+    /// Joint-space mass matrix (CRBA): input `q`, output the full symmetric `nv x nv` matrix, column-major.
+    auto trace_mass_matrix(const pinocchio::Model &model, const std::string &language) -> Traced;
+
+    /// Inverse-dynamics derivatives (pinocchio's analytical RNEA derivatives): input `[q, v, a]`, output
+    /// `[dtau/dq, dtau/dv]`, each `nv x nv` column-major.
+    auto trace_inverse_dynamics_derivatives(const pinocchio::Model &model, const std::string &language)
+        -> Traced;
     auto trace_integrate_configuration(const pinocchio::Model &model, const std::string &language)
         -> Traced;
 
@@ -68,6 +79,9 @@ namespace cricket
         std::string language = "c++";
         std::optional<Bounds> bounds;
         bool forward_dynamics = false;
+        bool inverse_dynamics = false;
+        bool mass_matrix = false;
+        bool inverse_dynamics_derivatives = false;
         nlohmann::json data;
     };
 

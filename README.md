@@ -193,6 +193,7 @@ The header defines, in `namespace cricket::robots::<lowercase name>`:
 - `sphere_centers(q, spheres)`: world-frame `[x, y, z, r]` for every collision sphere.
 - `n_q`, `n_spheres`, `end_effector`, `joint_names`: `q` is ordered as `joint_names`.
 - `forward_dynamics(x, qdd)` (when `forward_dynamics` is set): joint accelerations from `x = [q, qd, tau]` by the articulated-body algorithm, using `dynamics_urdf` when given.
+- `inverse_dynamics(x, tau)`, `mass_matrix(q, M)` and `inverse_dynamics_derivatives(x, dtau)` (when `inverse_dynamics`, `mass_matrix` and `inverse_dynamics_derivatives` are set): RNEA torques from `x = [q, qd, qdd]`; the full symmetric mass matrix, column-major; and `[dtau/dq, dtau/dqd]`, column-major, from pinocchio's analytical derivatives.
 - `frame_poses(q, poses)` (when the data lists frame names under `"trace_frames"`): world pose of each named frame, 7 floats each, in the order given, with `n_frames` and `frame_names`. URDF joint and link names are both accepted; if a joint and a link share a name, the joint's frame is used.
 
 Every function is straight-line code with compile-time constants: there is no topology to walk and no runtime indexing, so all per-thread state stays in registers.

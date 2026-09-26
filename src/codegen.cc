@@ -203,7 +203,7 @@ namespace cricket
             data["framesfk_code_output"] = frames.outputs;
         }
 
-        if (opts.forward_dynamics)
+        if (opts.forward_dynamics or opts.inverse_dynamics or opts.mass_matrix or opts.inverse_dynamics_derivatives)
         {
             pinocchio::Model dynamics_model;
             if (opts.dynamics_urdf)
@@ -233,10 +233,28 @@ namespace cricket
             data["effort_upper"] = effort_upper;
             data["velocity_lower"] = velocity_lower;
             data["velocity_upper"] = velocity_upper;
-            auto dynamics = trace_forward_dynamics(dynamics_model, opts.language);
-            data["forward_dynamics_code"] = dynamics.code;
-            data["forward_dynamics_code_vars"] = dynamics.temp_variables;
-            data["forward_dynamics_code_output"] = dynamics.outputs;
+            const auto add = [&](const std::string &key, const Traced &traced)
+            {
+                data[key + "_code"] = traced.code;
+                data[key + "_code_vars"] = traced.temp_variables;
+                data[key + "_code_output"] = traced.outputs;
+            };
+            if (opts.forward_dynamics)
+            {
+                add("forward_dynamics", trace_forward_dynamics(dynamics_model, opts.language));
+            }
+            if (opts.inverse_dynamics)
+            {
+                add("inverse_dynamics", trace_inverse_dynamics(dynamics_model, opts.language));
+            }
+            if (opts.mass_matrix)
+            {
+                add("mass_matrix", trace_mass_matrix(dynamics_model, opts.language));
+            }
+            if (opts.inverse_dynamics_derivatives)
+            {
+                add("inverse_dynamics_derivatives", trace_inverse_dynamics_derivatives(dynamics_model, opts.language));
+            }
         }
 
         inja::Environment env;

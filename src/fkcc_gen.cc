@@ -113,6 +113,9 @@ int main(int argc, char **argv)
     gen_options.language = language;
     gen_options.bounds = bounds;
     gen_options.forward_dynamics = data.value("forward_dynamics", false);
+    gen_options.inverse_dynamics = data.value("inverse_dynamics", false);
+    gen_options.mass_matrix = data.value("mass_matrix", false);
+    gen_options.inverse_dynamics_derivatives = data.value("inverse_dynamics_derivatives", false);
     gen_options.data = data;
     for (const auto &subt : data["subtemplates"])
     {

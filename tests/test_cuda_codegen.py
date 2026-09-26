@@ -67,7 +67,7 @@ extern "C" int batch(const float *q, float *pose, float *jac, float *spheres, in
 """
 
 
-def generate(robot: str, frames: list[str] | None = None, forward_dynamics: bool = False):
+def generate(robot: str, frames: list[str] | None = None, forward_dynamics: bool = False, **dynamics: bool):
     cfg = json.loads((ROOT / f"{robot}.json").read_text())
     data = {"name": cfg["name"]}
     if frames is not None:
@@ -80,6 +80,8 @@ def generate(robot: str, frames: list[str] | None = None, forward_dynamics: bool
         data=data,
     )
     opts.forward_dynamics = forward_dynamics
+    for key, value in dynamics.items():
+        setattr(opts, key, value)
     return cfg, cricket.generate_robot_source(opts)
 
 
@@ -259,3 +261,59 @@ def test_forward_dynamics_matches_pinocchio(robot, jit, tmp_path):
         xi = x[i].astype(np.float64)
         ref = pin.aba(model, data, xi[:n], xi[n:2 * n], xi[2 * n:])
         np.testing.assert_allclose(qdd[i], ref, rtol=1e-3, atol=1e-3 * max(1.0, np.abs(ref).max()))
+
+
+DYN_WRAPPER = r"""
+#include "robot.cuh"
+namespace r = cricket::robots::{ns};
+extern "C" void dyn_{ns}(const float *x, float *tau, float *m, float *dtau, int n)
+{{
+    for (int i = 0; i < n; ++i)
+    {{
+        r::inverse_dynamics(x + i * 3 * r::n_q, tau + i * r::n_q);
+        r::mass_matrix(x + i * 3 * r::n_q, m + i * r::n_q * r::n_q);
+        r::inverse_dynamics_derivatives(x + i * 3 * r::n_q, dtau + i * 2 * r::n_q * r::n_q);
+    }}
+}}
+"""
+
+
+MIMIC_ROBOTS = {"fr3"}  # pinocchio's RNEA derivatives do not support mimic joints
+
+
+@pytest.mark.parametrize("robot", ROBOTS)
+def test_inverse_dynamics_mass_matrix_derivatives_match_pinocchio(robot, jit, tmp_path):
+    if robot in MIMIC_ROBOTS:
+        with pytest.raises(RuntimeError, match="mimic"):
+            generate(robot, inverse_dynamics_derivatives=True)
+        pytest.skip("derivatives refused for mimic joints (checked above)")
+    cfg, gen = generate(robot, inverse_dynamics=True, mass_matrix=True, inverse_dynamics_derivatives=True)
+    ns = cfg["name"].lower()
+    (tmp_path / "robot.cuh").write_text(gen.source)
+    opts = _core_ext.jit.CompileOptions()
+    opts.include_dirs = [str(tmp_path)]
+    jit.add_source(DYN_WRAPPER.format(ns=ns), opts)
+    fn = ctypes.CFUNCTYPE(None, *[ctypes.POINTER(ctypes.c_float)] * 4, ctypes.c_int)(
+        jit.lookup_address(f"dyn_{ns}"))
+
+    model = pin.buildModelFromUrdf(str(ROOT / cfg["urdf"]), mimic=True)
+    data = model.createData()
+    n = model.nq
+    x = np.random.default_rng(4).uniform(-1.0, 1.0, size=(100, 3 * n)).astype(np.float32)
+    tau = np.empty((len(x), n), np.float32)
+    m = np.empty((len(x), n, n), np.float32)
+    dtau = np.empty((len(x), 2, n, n), np.float32)
+    ptr = ctypes.POINTER(ctypes.c_float)
+    fn(*(a.ctypes.data_as(ptr) for a in (x, tau, m, dtau)), len(x))
+
+    def close(got, ref):
+        np.testing.assert_allclose(got, ref, rtol=1e-4, atol=1e-4 * max(1.0, np.abs(ref).max()))
+
+    for i in range(len(x)):
+        q, v, a = (x[i, k * n:(k + 1) * n].astype(np.float64) for k in range(3))
+        close(tau[i], pin.rnea(model, data, q, v, a))
+        M = pin.crba(model, data, q)
+        close(m[i].T, np.triu(M) + np.triu(M, 1).T)  # column-major
+        dq, dv, _ = pin.computeRNEADerivatives(model, data, q, v, a)
+        close(dtau[i, 0].T, dq)
+        close(dtau[i, 1].T, dv)

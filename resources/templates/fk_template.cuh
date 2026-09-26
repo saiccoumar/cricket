@@ -12,6 +12,9 @@
 //   poses    (7 * n_frames)   frame_poses(): world pose of each frame named in the "trace_frames" data key
 //   qdd      (n_q)            forward_dynamics() (when generated with forward dynamics): accelerations
 //                             from [q, qd, tau] (3 * n_q), gravity -9.81 along world z
+//   tau      (n_q)            inverse_dynamics(): torques from [q, qd, qdd] (3 * n_q)
+//   M        (n_q * n_q)      mass_matrix(): full symmetric joint-space inertia, column-major
+//   dtau     (2 * n_q * n_q)  inverse_dynamics_derivatives(): [dtau/dq, dtau/dqd] from [q, qd, qdd], column-major
 //
 // Define CRICKET_HD before including to override the function qualifiers.
 
@@ -140,6 +143,33 @@ namespace cricket::robots::{{lower(name)}}
         float *y = qdd;
 
         {{forward_dynamics_code}}
+    }
+{% endif %}{% if exists("inverse_dynamics_code") %}
+    // Inverse dynamics (RNEA) of the dynamics model: x = [q, qd, qdd], each n_q long.
+    CRICKET_HD void inverse_dynamics(const float *x, float *tau)
+    {
+        {% if inverse_dynamics_code_vars > 0 %}float v[{{inverse_dynamics_code_vars}}];{% endif %}
+        float *y = tau;
+
+        {{inverse_dynamics_code}}
+    }
+{% endif %}{% if exists("mass_matrix_code") %}
+    // Joint-space mass matrix (CRBA) of the dynamics model, n_q x n_q column-major.
+    CRICKET_HD void mass_matrix(const float *x, float *M)
+    {
+        {% if mass_matrix_code_vars > 0 %}float v[{{mass_matrix_code_vars}}];{% endif %}
+        float *y = M;
+
+        {{mass_matrix_code}}
+    }
+{% endif %}{% if exists("inverse_dynamics_derivatives_code") %}
+    // Inverse-dynamics derivatives: x = [q, qd, qdd] -> [dtau/dq, dtau/dqd], each n_q x n_q column-major.
+    CRICKET_HD void inverse_dynamics_derivatives(const float *x, float *dtau)
+    {
+        {% if inverse_dynamics_derivatives_code_vars > 0 %}float v[{{inverse_dynamics_derivatives_code_vars}}];{% endif %}
+        float *y = dtau;
+
+        {{inverse_dynamics_derivatives_code}}
     }
 {% endif %}
 }  // namespace cricket::robots::{{lower(name)}}

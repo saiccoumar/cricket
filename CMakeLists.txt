@@ -114,6 +114,9 @@ add_library(cricket
     src/tracing/distance.cc
     src/tracing/frame_jacobian.cc
     src/tracing/forward_dynamics.cc
+    src/tracing/inverse_dynamics.cc
+    src/tracing/mass_matrix.cc
+    src/tracing/inverse_dynamics_derivatives.cc
     src/tracing/integrate_configuration.cc
 )
 add_library(cricket::cricket ALIAS cricket)
